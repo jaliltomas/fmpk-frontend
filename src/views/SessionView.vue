@@ -63,6 +63,59 @@
         <div class="bg-white border border-slate-100 rounded-2xl shadow-md p-6">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
+              <h2 class="text-lg font-semibold text-slate-900">Configuración de Nodos de Matcheo</h2>
+              <p class="text-sm text-slate-500">Definí las estrategias y ordená cómo se ejecutarán.</p>
+            </div>
+            <button
+              type="button"
+              class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-indigo-700 transition-colors"
+              @click="openNodeModal"
+            >
+              + Agregar Nodo
+            </button>
+          </div>
+
+          <div v-if="nodes.length === 0" class="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center text-sm text-slate-500">
+            Agregá al menos un nodo de matcheo para continuar.
+          </div>
+
+          <div v-else class="mt-6 space-y-3">
+            <div
+              v-for="(node, index) in nodes"
+              :key="node.id"
+              class="bg-white shadow rounded-xl p-3 flex items-center justify-between border border-slate-200"
+              draggable="true"
+              @dragstart="handleNodeDragStart(index)"
+              @dragover.prevent
+              @drop="handleNodeDrop(index)"
+              @dragend="handleNodeDragEnd"
+            >
+              <div class="flex items-center gap-3">
+                <button
+                  type="button"
+                  class="text-slate-400 hover:text-slate-600"
+                  aria-label="Reordenar nodo"
+                >
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M4 10h16M4 14h16" />
+                  </svg>
+                </button>
+                <span class="text-sm font-medium text-slate-700">{{ node.name }}</span>
+              </div>
+              <button
+                type="button"
+                class="text-sm font-medium text-red-500 hover:text-red-700"
+                @click="removeNode(node.id)"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white border border-slate-100 rounded-2xl shadow-md p-6">
+          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
               <h2 class="text-lg font-semibold text-slate-900">Sitios</h2>
               <p class="text-sm text-slate-500">Cargá los sitios que se van a matchear con sus respectivos catálogos.</p>
             </div>
@@ -233,6 +286,56 @@
         </form>
       </div>
     </div>
+
+    <div
+      v-if="showNodeModal"
+      class="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 px-4 py-6"
+    >
+      <div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-900">Agregar nodo de matcheo</h3>
+            <p class="text-sm text-slate-500">Seleccioná la estrategia que querés ejecutar.</p>
+          </div>
+          <button
+            type="button"
+            class="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            @click="closeNodeModal"
+            aria-label="Cerrar"
+          >
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+
+        <form class="mt-6 space-y-4" @submit.prevent="addNode">
+          <div>
+            <label for="node-type" class="block text-sm font-medium text-slate-600">Nodo disponible</label>
+            <select
+              id="node-type"
+              v-model="nodeForm.type"
+              class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option v-for="option in availableNodes" :key="option" :value="option">{{ option }}</option>
+            </select>
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors"
+              @click="closeNodeModal"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-indigo-700 transition-colors"
+            >
+              Agregar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -240,6 +343,7 @@
 import { generateSessionId, loadSessions, saveSessions } from '../utils/storage.js';
 
 const SITE_KEYS = ['products', 'items', 'data'];
+const AVAILABLE_NODES = ['EAN', 'Embeddings', 'AIEAN', 'Nombre', 'Descripción'];
 
 export default {
   name: 'SessionView',
@@ -252,9 +356,11 @@ export default {
         error: ''
       },
       sites: [],
+      nodes: [],
       matchRate: null,
       formError: '',
       showSiteModal: false,
+      showNodeModal: false,
       editingSiteId: null,
       siteForm: {
         name: '',
@@ -262,7 +368,12 @@ export default {
         fileName: '',
         productCount: 0,
         error: ''
-      }
+      },
+      nodeForm: {
+        type: AVAILABLE_NODES[0]
+      },
+      draggedNodeIndex: null,
+      availableNodes: AVAILABLE_NODES
     };
   },
   computed: {
@@ -282,7 +393,7 @@ export default {
       return `${this.matchRate.toFixed(1)}%`;
     },
     canSaveSession() {
-      return Boolean(this.sessionName.trim() && this.requestedProducts.fileName);
+      return Boolean(this.sessionName.trim() && this.requestedProducts.fileName && this.nodes.length > 0);
     }
   },
   created() {
@@ -329,6 +440,13 @@ export default {
       this.showSiteModal = false;
       this.editingSiteId = null;
       this.siteForm.error = '';
+    },
+    openNodeModal() {
+      this.nodeForm.type = this.availableNodes[0];
+      this.showNodeModal = true;
+    },
+    closeNodeModal() {
+      this.showNodeModal = false;
     },
     handleSiteFileChange(event) {
       const file = event.target.files[0];
@@ -393,6 +511,39 @@ export default {
     removeSite(siteId) {
       this.sites = this.sites.filter((site) => site.id !== siteId);
     },
+    addNode() {
+      if (!this.nodeForm.type) {
+        return;
+      }
+
+      const newNode = {
+        id: `node-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        name: this.nodeForm.type
+      };
+
+      this.nodes = [...this.nodes, newNode];
+      this.closeNodeModal();
+    },
+    removeNode(nodeId) {
+      this.nodes = this.nodes.filter((node) => node.id !== nodeId);
+    },
+    handleNodeDragStart(index) {
+      this.draggedNodeIndex = index;
+    },
+    handleNodeDrop(index) {
+      if (this.draggedNodeIndex === null || this.draggedNodeIndex === index) {
+        return;
+      }
+
+      const updatedNodes = [...this.nodes];
+      const [movedNode] = updatedNodes.splice(this.draggedNodeIndex, 1);
+      updatedNodes.splice(index, 0, movedNode);
+      this.nodes = updatedNodes;
+      this.draggedNodeIndex = null;
+    },
+    handleNodeDragEnd() {
+      this.draggedNodeIndex = null;
+    },
     extractItemsCount(parsed) {
       if (!parsed || typeof parsed !== 'object') {
         return Array.isArray(parsed) ? parsed.length : 0;
@@ -432,7 +583,7 @@ export default {
     handleSaveSession() {
       this.formError = '';
       if (!this.canSaveSession) {
-        this.formError = 'Ingresá el nombre de la sesión y cargá el JSON de productos solicitados.';
+        this.formError = 'Ingresá el nombre de la sesión, cargá el JSON de productos solicitados y agregá al menos un nodo de matcheo.';
         return;
       }
 
@@ -445,7 +596,8 @@ export default {
         sitesCount: this.sites.length,
         requestedProductsCount: this.totalRequestedProducts,
         totalSiteProducts: this.totalSiteProducts,
-        sites: this.sites
+        sites: this.sites,
+        nodes: this.nodes
       };
 
       const storedSessions = loadSessions();
