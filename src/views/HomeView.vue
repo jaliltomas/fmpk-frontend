@@ -37,34 +37,16 @@
         Todavía no hay sesiones
       </div>
 
-      <div v-else class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-200">
-          <thead class="bg-slate-50">
-            <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Nombre de sesión
-              </th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Fecha de creación
-              </th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Estado (% de match)
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 bg-white">
-            <tr v-for="session in orderedSessions" :key="session.id" class="hover:bg-slate-50">
-              <td class="px-6 py-4 text-sm font-medium text-slate-900">
-                {{ session.name }}
-                <p v-if="session.description" class="text-xs font-normal text-slate-500">{{ session.description }}</p>
-              </td>
-              <td class="px-6 py-4 text-sm text-slate-600">{{ formatDate(session.createdAt) }}</td>
-              <td class="px-6 py-4 text-sm font-semibold text-slate-900">
-                {{ formatMatchRate(session) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-else class="grid gap-4 px-6 py-6 sm:grid-cols-2 xl:grid-cols-3">
+        <SessionCard
+          v-for="session in orderedSessions"
+          :key="session.id"
+          :nombre="session.name"
+          :fecha="formatDate(session.createdAt)"
+          :porcentaje-match="resolveMatchRate(session)"
+          :cantidad-sitios="resolveSitesCount(session)"
+          @select="goToSessionDetail(session.id)"
+        />
       </div>
     </div>
   </section>
@@ -72,9 +54,13 @@
 
 <script>
 import { loadSessions } from '../utils/storage.js';
+import SessionCard from '../components/SessionCard.vue';
 
 export default {
   name: 'HomeView',
+  components: {
+    SessionCard
+  },
   data() {
     return {
       sessions: []
@@ -162,12 +148,8 @@ export default {
       }
       return 0;
     },
-    formatMatchRate(session) {
-      const value = this.resolveMatchRate(session);
-      if (typeof value !== 'number') {
-        return 'Sin datos';
-      }
-      return `${value.toFixed(1)}%`;
+    goToSessionDetail(sessionId) {
+      this.$router.push({ name: 'session-detail', params: { id: sessionId } });
     }
   },
   watch: {
