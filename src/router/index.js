@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import HomeView from '../views/HomeView.vue';
 import SessionView from '../views/SessionView.vue';
-import SessionDetailView from '../views/SessionDetailView.vue';
+import SessionDetail from '../views/SessionDetail.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -19,7 +19,7 @@ const router = createRouter({
     {
       path: '/sesiones/:id',
       name: 'session-detail',
-      component: SessionDetailView
+      component: SessionDetail
     }
   ]
 });
