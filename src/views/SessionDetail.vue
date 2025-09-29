@@ -80,66 +80,152 @@
             No hay sitios cargados para validar matcheos.
           </div>
 
-          <div v-else class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200">
-              <thead class="bg-slate-50">
-                <tr>
-                  <th scope="col" class="min-w-[200px] px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Producto solicitado
-                  </th>
-                  <th
-                    v-for="site in session.sites"
-                    :key="site.id || site.name"
-                    scope="col"
-                    class="min-w-[220px] px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+          <div v-else>
+            <div class="flex flex-col gap-4 border-b border-slate-100 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
+              <div class="text-sm text-slate-500">
+                Mostrando
+                <span class="font-medium text-slate-700">{{ pageStart }}</span>
+                -
+                <span class="font-medium text-slate-700">{{ pageEnd }}</span>
+                de
+                <span class="font-medium text-slate-700">{{ totalRows }}</span>
+                productos solicitados
+              </div>
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
+                <label class="flex items-center gap-2 text-sm text-slate-500">
+                  <span>Filas por página</span>
+                  <select
+                    v-model.number="pageSize"
+                    class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   >
-                    {{ site.name }}
-                  </th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100 bg-white">
-                <tr v-for="row in matchRows" :key="row.id" class="hover:bg-slate-50">
-                  <td class="px-6 py-4 text-sm font-medium text-slate-900">
-                    {{ row.name }}
-                  </td>
-                  <td
-                    v-for="match in row.matches"
-                    :key="match.siteId"
-                    class="px-6 py-4"
+                    <option v-for="option in pageSizeOptions" :key="option" :value="option">
+                      {{ option }}
+                    </option>
+                  </select>
+                </label>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="currentPage === 1"
+                    @click="goToPreviousPage"
                   >
-                    <div class="space-y-3">
-                      <p class="text-sm font-medium text-slate-700">{{ match.value }}</p>
-                      <div class="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          class="rounded-lg px-3 py-1 text-xs font-semibold shadow-sm transition"
-                          :class="[
-                            match.status === true
-                              ? 'bg-green-500 text-white hover:bg-green-600'
-                              : 'bg-green-100 text-green-700 hover:bg-green-200'
-                          ]"
-                          @click="markMatch(row.id, match.siteId, true)"
-                        >
-                          Correcto
-                        </button>
-                        <button
-                          type="button"
-                          class="rounded-lg px-3 py-1 text-xs font-semibold shadow-sm transition"
-                          :class="[
-                            match.status === false
-                              ? 'bg-rose-500 text-white hover:bg-rose-600'
-                              : 'bg-rose-100 text-rose-600 hover:bg-rose-200'
-                          ]"
-                          @click="markMatch(row.id, match.siteId, false)"
-                        >
-                          Incorrecto
-                        </button>
+                    Anterior
+                  </button>
+                  <span class="text-sm font-medium text-slate-600">
+                    Página {{ currentPage }} de {{ totalPages }}
+                  </span>
+                  <button
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="currentPage === totalPages"
+                    @click="goToNextPage"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-slate-200">
+                <thead class="bg-slate-50">
+                  <tr>
+                    <th scope="col" class="min-w-[200px] px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Producto solicitado
+                    </th>
+                    <th
+                      v-for="site in session.sites"
+                      :key="site.id || site.name"
+                      scope="col"
+                      class="min-w-[220px] px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                    >
+                      {{ site.name }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 bg-white">
+                  <tr v-for="row in paginatedRows" :key="row.id" class="hover:bg-slate-50">
+                    <td class="px-6 py-4 text-sm font-medium text-slate-900">
+                      {{ row.name }}
+                    </td>
+                    <td
+                      v-for="match in row.matches"
+                      :key="match.siteId"
+                      class="px-6 py-4"
+                    >
+                      <div class="space-y-3">
+                        <p class="text-sm font-medium text-slate-700">{{ match.value }}</p>
+                        <div class="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            class="rounded-lg px-3 py-1 text-xs font-semibold shadow-sm transition"
+                            :class="[
+                              match.status === true
+                                ? 'bg-green-500 text-white hover:bg-green-600'
+                                : 'bg-green-100 text-green-700 hover:bg-green-200'
+                            ]"
+                            @click="markMatch(row.id, match.siteId, true)"
+                          >
+                            Correcto
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-lg px-3 py-1 text-xs font-semibold shadow-sm transition"
+                            :class="[
+                              match.status === false
+                                ? 'bg-rose-500 text-white hover:bg-rose-600'
+                                : 'bg-rose-100 text-rose-600 hover:bg-rose-200'
+                            ]"
+                            @click="markMatch(row.id, match.siteId, false)"
+                          >
+                            Incorrecto
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="flex flex-col items-center gap-4 border-t border-slate-100 px-6 py-4 sm:flex-row sm:justify-between">
+              <p class="text-xs text-slate-500">
+                Página {{ currentPage }} de {{ totalPages }} · {{ pageSize }} filas por página
+              </p>
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="currentPage === 1"
+                  @click="goToFirstPage"
+                >
+                  Primera
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="currentPage === 1"
+                  @click="goToPreviousPage"
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="currentPage === totalPages"
+                  @click="goToNextPage"
+                >
+                  Siguiente
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="currentPage === totalPages"
+                  @click="goToLastPage"
+                >
+                  Última
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -159,7 +245,10 @@ export default {
       isLoading: false,
       loadingProgress: 0,
       progressInterval: null,
-      loadingTimeout: null
+      loadingTimeout: null,
+      currentPage: 1,
+      pageSize: 25,
+      pageSizeOptions: [10, 25, 50, 100]
     };
   },
   computed: {
@@ -230,6 +319,35 @@ export default {
         return 'Todavía no validaste matcheos';
       }
       return `${this.validationStats.correct} correctos de ${this.validationStats.validated} validados`;
+    },
+    totalRows() {
+      return Array.isArray(this.matchRows) ? this.matchRows.length : 0;
+    },
+    totalPages() {
+      if (this.totalRows === 0) {
+        return 1;
+      }
+      return Math.ceil(this.totalRows / this.pageSize);
+    },
+    pageStart() {
+      if (this.totalRows === 0) {
+        return 0;
+      }
+      return (this.currentPage - 1) * this.pageSize + 1;
+    },
+    pageEnd() {
+      if (this.totalRows === 0) {
+        return 0;
+      }
+      return Math.min(this.currentPage * this.pageSize, this.totalRows);
+    },
+    paginatedRows() {
+      if (!Array.isArray(this.matchRows) || this.matchRows.length === 0) {
+        return [];
+      }
+      const start = (this.currentPage - 1) * this.pageSize;
+      const end = start + this.pageSize;
+      return this.matchRows.slice(start, end);
     }
   },
   created() {
@@ -241,6 +359,20 @@ export default {
   watch: {
     '$route.params.id'() {
       this.fetchSession();
+    },
+    matchRows(newRows) {
+      const total = Array.isArray(newRows) ? newRows.length : 0;
+      if (total === 0) {
+        this.currentPage = 1;
+        return;
+      }
+      const maxPage = Math.max(1, Math.ceil(total / this.pageSize));
+      if (this.currentPage > maxPage) {
+        this.currentPage = maxPage;
+      }
+    },
+    pageSize() {
+      this.currentPage = 1;
     }
   },
   methods: {
@@ -252,6 +384,7 @@ export default {
       if (!sessionId) {
         this.session = null;
         this.matchRows = [];
+        this.currentPage = 1;
         return;
       }
 
@@ -261,17 +394,20 @@ export default {
 
       if (!this.session) {
         this.matchRows = [];
+        this.currentPage = 1;
         return;
       }
 
       if (Array.isArray(this.session.matchResults) && this.session.matchResults.length > 0) {
         this.matchRows = this.session.matchResults;
+        this.currentPage = 1;
         this.isLoading = false;
         this.persistValidationStats();
         return;
       }
 
       this.matchRows = [];
+      this.currentPage = 1;
       this.startSimulation();
     },
     startSimulation() {
@@ -330,6 +466,7 @@ export default {
       });
 
       this.matchRows = generated;
+      this.currentPage = 1;
       this.session.matchResults = generated;
       this.persistValidationStats();
       this.persistSession();
@@ -345,6 +482,26 @@ export default {
       const descriptors = ['Match simulado', 'Coincidencia sugerida', 'Producto coincidente', 'Referencia sugerida'];
       const descriptor = descriptors[Math.floor(Math.random() * descriptors.length)];
       return `${descriptor} (${siteName} · ${productName.split('#')[0].trim()}${Math.floor(Math.random() * 900 + 100)})`;
+    },
+    goToFirstPage() {
+      this.goToPage(1);
+    },
+    goToPreviousPage() {
+      this.goToPage(this.currentPage - 1);
+    },
+    goToNextPage() {
+      this.goToPage(this.currentPage + 1);
+    },
+    goToLastPage() {
+      this.goToPage(this.totalPages);
+    },
+    goToPage(page) {
+      if (this.totalRows === 0) {
+        this.currentPage = 1;
+        return;
+      }
+      const safePage = Math.min(Math.max(page, 1), this.totalPages);
+      this.currentPage = safePage;
     },
     markMatch(rowId, siteId, status) {
       const rows = [...this.matchRows];
