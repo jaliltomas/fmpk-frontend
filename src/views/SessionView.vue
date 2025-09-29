@@ -1,136 +1,236 @@
 <template>
-  <section class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-    <div class="lg:col-span-1">
-      <div class="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
-        <h2 class="text-xl font-semibold text-slate-800">{{ isEditing ? 'Editar sesión' : 'Nueva sesión' }}</h2>
-        <p class="mt-2 text-sm text-slate-500">
-          Define los detalles de la sesión y agrega participantes (uno por línea o separados por comas).
+  <section class="space-y-8">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold text-slate-900">Nueva Sesión de Matcheo</h1>
+        <p class="text-sm text-slate-500">
+          Configurá los productos solicitados y los sitios a matchear antes de guardar la sesión.
         </p>
+      </div>
+      <button
+        type="button"
+        class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-indigo-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+        :disabled="!canSaveSession"
+        @click="handleSaveSession"
+      >
+        Guardar Sesión
+      </button>
+    </div>
 
-        <form class="mt-6 space-y-4" @submit.prevent="submitForm">
-          <div>
-            <label for="name" class="block text-sm font-medium text-slate-600">Nombre de la sesión</label>
-            <input
-              id="name"
-              v-model="form.name"
-              type="text"
-              required
-              class="mt-1 border border-slate-300 rounded-md p-2 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Match con inversores"
-            />
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div class="space-y-6 xl:col-span-2">
+        <div class="bg-white border border-slate-100 rounded-2xl shadow-md p-6">
+          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div class="col-span-1 md:col-span-2">
+              <label for="session-name" class="block text-sm font-medium text-slate-600">Nombre de la sesión</label>
+              <input
+                id="session-name"
+                v-model="sessionName"
+                type="text"
+                class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="Ej. Match de catálogos Q2"
+              />
+            </div>
           </div>
-          <div>
-            <label for="description" class="block text-sm font-medium text-slate-600">Descripción</label>
-            <textarea
-              id="description"
-              v-model="form.description"
-              rows="3"
-              class="mt-1 border border-slate-300 rounded-md p-2 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Objetivo de la sesión"
-            ></textarea>
+
+          <div class="mt-6">
+            <h2 class="text-lg font-semibold text-slate-900">Productos solicitados</h2>
+            <p class="mt-1 text-sm text-slate-500">
+              Subí un archivo JSON con los productos que se necesitan matchear. Sólo se admite un archivo por sesión.
+            </p>
+
+            <div class="mt-4">
+              <label class="flex w-full cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-indigo-300 bg-indigo-50/40 px-4 py-6 text-center transition hover:border-indigo-400 hover:bg-indigo-50">
+                <span class="text-sm font-medium text-indigo-600">Seleccionar archivo</span>
+                <span class="mt-1 text-xs text-slate-500">Formatos soportados: JSON</span>
+                <input
+                  type="file"
+                  accept="application/json"
+                  class="sr-only"
+                  @change="handleProductsFileChange"
+                />
+              </label>
+              <p v-if="requestedProducts.fileName" class="mt-3 text-sm text-slate-600">
+                Archivo cargado: <span class="font-medium">{{ requestedProducts.fileName }}</span>
+                <span class="block text-xs text-slate-500">{{ requestedProducts.count }} productos detectados</span>
+              </p>
+              <p v-else class="mt-3 text-sm text-slate-400">Todavía no se cargó ningún archivo.</p>
+              <p v-if="requestedProducts.error" class="mt-2 text-sm text-rose-500">{{ requestedProducts.error }}</p>
+            </div>
           </div>
-          <div>
-            <label for="date" class="block text-sm font-medium text-slate-600">Fecha</label>
-            <input
-              id="date"
-              v-model="form.date"
-              type="date"
-              class="mt-1 border border-slate-300 rounded-md p-2 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label for="participants" class="block text-sm font-medium text-slate-600">Participantes</label>
-            <textarea
-              id="participants"
-              v-model="form.participantsText"
-              rows="4"
-              class="mt-1 border border-slate-300 rounded-md p-2 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Ana, Juan, Pedro"
-            ></textarea>
-            <p class="mt-1 text-xs text-slate-400">Separa los nombres por comas o saltos de línea.</p>
-          </div>
-          <div class="flex items-center gap-3">
+        </div>
+
+        <div class="bg-white border border-slate-100 rounded-2xl shadow-md p-6">
+          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 class="text-lg font-semibold text-slate-900">Sitios</h2>
+              <p class="text-sm text-slate-500">Cargá los sitios que se van a matchear con sus respectivos catálogos.</p>
+            </div>
             <button
-              type="submit"
-              class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-indigo-700 transition-colors"
-            >
-              {{ isEditing ? 'Actualizar sesión' : 'Crear sesión' }}
-            </button>
-            <button
-              v-if="isEditing"
               type="button"
-              class="text-sm font-medium text-slate-500 hover:text-slate-700"
-              @click="resetForm"
+              class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-indigo-700 transition-colors"
+              @click="openNewSiteModal"
             >
-              Cancelar
+              + Nuevo Sitio
             </button>
           </div>
-        </form>
+
+          <div v-if="sites.length === 0" class="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center text-sm text-slate-500">
+            Todavía no se cargaron sitios.
+          </div>
+
+          <div v-else class="mt-6 overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200">
+              <thead class="bg-slate-50">
+                <tr>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Nombre
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    URL Base
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Archivo
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 bg-white">
+                <tr v-for="site in sites" :key="site.id" class="hover:bg-slate-50">
+                  <td class="px-6 py-4 text-sm font-medium text-slate-900">
+                    {{ site.name }}
+                    <span class="block text-xs font-normal text-slate-500">{{ site.productCount }} productos</span>
+                  </td>
+                  <td class="px-6 py-4 text-sm text-slate-600">
+                    <a :href="site.baseUrl" target="_blank" rel="noopener" class="text-indigo-600 hover:underline">{{ site.baseUrl }}</a>
+                  </td>
+                  <td class="px-6 py-4 text-sm text-slate-600">{{ site.fileName }}</td>
+                  <td class="px-6 py-4 text-sm">
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition-colors"
+                        @click="editSite(site)"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-lg border border-rose-200 px-3 py-2 text-sm font-medium text-rose-500 hover:bg-rose-50 transition-colors"
+                        @click="removeSite(site.id)"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-6">
+        <div class="bg-white border border-slate-100 rounded-2xl shadow-md p-6">
+          <h2 class="text-lg font-semibold text-slate-900">Métricas de la sesión</h2>
+          <dl class="mt-6 space-y-4">
+            <div class="flex items-center justify-between">
+              <dt class="text-sm text-slate-500">Total de productos solicitados</dt>
+              <dd class="text-base font-semibold text-slate-900">{{ totalRequestedProducts }}</dd>
+            </div>
+            <div class="flex items-center justify-between">
+              <dt class="text-sm text-slate-500">Total de productos en sitios</dt>
+              <dd class="text-base font-semibold text-slate-900">{{ totalSiteProducts }}</dd>
+            </div>
+            <div class="flex items-center justify-between">
+              <dt class="text-sm text-slate-500">% de match estimado</dt>
+              <dd class="text-base font-semibold text-indigo-600">{{ formattedMatchRate }}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div v-if="formError" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+          {{ formError }}
+        </div>
       </div>
     </div>
 
-    <div class="lg:col-span-2">
-      <div class="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
-        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div
+      v-if="showSiteModal"
+      class="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 px-4 py-6"
+    >
+      <div class="relative w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl">
+        <div class="flex items-start justify-between gap-4">
           <div>
-            <h2 class="text-xl font-semibold text-slate-800">Sesiones guardadas</h2>
-            <p class="text-sm text-slate-500">Gestiona y actualiza tus sesiones de matching.</p>
+            <h3 class="text-lg font-semibold text-slate-900">{{ editingSiteId ? 'Editar sitio' : 'Nuevo sitio' }}</h3>
+            <p class="text-sm text-slate-500">Completá los datos del sitio y cargá el JSON de productos.</p>
           </div>
           <button
             type="button"
-            class="inline-flex items-center justify-center rounded-xl border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 transition-colors"
-            @click="syncFromStorage"
+            class="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            @click="closeSiteModal"
+            aria-label="Cerrar"
           >
-            Refrescar
+            <span aria-hidden="true">&times;</span>
           </button>
         </div>
 
-        <div v-if="sessions.length === 0" class="mt-8 text-center text-slate-500">
-          Aún no has creado sesiones. Usa el formulario para iniciar.
-        </div>
-
-        <ul v-else class="mt-6 space-y-4">
-          <li
-            v-for="session in orderedSessions"
-            :key="session.id"
-            class="rounded-2xl border border-slate-100 p-4 shadow-sm hover:shadow-md transition"
-          >
-            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div class="space-y-2">
-                <h3 class="text-lg font-semibold text-slate-800">{{ session.name }}</h3>
-                <p class="text-sm text-slate-500">{{ session.description || 'Sin descripción' }}</p>
-                <div class="flex flex-wrap gap-2">
-                  <span
-                    v-for="participant in session.participants"
-                    :key="participant"
-                    class="inline-flex items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700"
-                  >
-                    {{ participant }}
-                  </span>
-                </div>
-              </div>
-              <div class="flex flex-col items-start md:items-end gap-3">
-                <span class="text-sm text-slate-500">{{ formatDate(session.date) }}</span>
-                <div class="flex gap-2">
-                  <button
-                    type="button"
-                    class="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
-                    @click="startEdit(session)"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    class="rounded-lg border border-rose-200 px-3 py-2 text-sm font-medium text-rose-500 hover:bg-rose-50 transition-colors"
-                    @click="removeSession(session.id)"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </div>
-            </div>
-          </li>
-        </ul>
+        <form class="mt-6 space-y-4" @submit.prevent="saveSite">
+          <div>
+            <label for="site-name" class="block text-sm font-medium text-slate-600">Nombre del sitio</label>
+            <input
+              id="site-name"
+              v-model="siteForm.name"
+              type="text"
+              class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Ej. MercadoLibre"
+              required
+            />
+          </div>
+          <div>
+            <label for="site-url" class="block text-sm font-medium text-slate-600">URL Base</label>
+            <input
+              id="site-url"
+              v-model="siteForm.baseUrl"
+              type="url"
+              class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="https://www.ejemplo.com"
+              required
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-600">Archivo JSON de scrape</label>
+            <input
+              type="file"
+              accept="application/json"
+              class="mt-1 w-full text-sm"
+              @change="handleSiteFileChange"
+            />
+            <p v-if="siteForm.fileName" class="mt-2 text-sm text-slate-600">
+              Archivo cargado: <span class="font-medium">{{ siteForm.fileName }}</span>
+              <span class="block text-xs text-slate-500">{{ siteForm.productCount }} productos detectados</span>
+            </p>
+            <p v-else class="mt-2 text-sm text-slate-400">Seleccioná un archivo JSON.</p>
+            <p v-if="siteForm.error" class="mt-2 text-sm text-rose-500">{{ siteForm.error }}</p>
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors"
+              @click="closeSiteModal"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-indigo-700 transition-colors"
+            >
+              Guardar
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </section>
@@ -139,116 +239,220 @@
 <script>
 import { generateSessionId, loadSessions, saveSessions } from '../utils/storage.js';
 
+const SITE_KEYS = ['products', 'items', 'data'];
+
 export default {
   name: 'SessionView',
   data() {
     return {
-      sessions: [],
-      form: {
-        id: null,
-        name: '',
-        description: '',
-        date: '',
-        participantsText: ''
+      sessionName: '',
+      requestedProducts: {
+        fileName: '',
+        count: 0,
+        error: ''
       },
-      isEditing: false
+      sites: [],
+      matchRate: null,
+      formError: '',
+      showSiteModal: false,
+      editingSiteId: null,
+      siteForm: {
+        name: '',
+        baseUrl: '',
+        fileName: '',
+        productCount: 0,
+        error: ''
+      }
     };
   },
   computed: {
-    orderedSessions() {
-      return [...this.sessions].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    totalRequestedProducts() {
+      return this.requestedProducts.count || 0;
+    },
+    totalSiteProducts() {
+      if (!Array.isArray(this.sites)) {
+        return 0;
+      }
+      return this.sites.reduce((acc, site) => acc + (site.productCount || 0), 0);
+    },
+    formattedMatchRate() {
+      if (typeof this.matchRate !== 'number') {
+        return '—';
+      }
+      return `${this.matchRate.toFixed(1)}%`;
+    },
+    canSaveSession() {
+      return Boolean(this.sessionName.trim() && this.requestedProducts.fileName);
     }
   },
   created() {
-    this.sessions = loadSessions();
+    this.matchRate = this.generateRandomMatch();
   },
   methods: {
-    submitForm() {
-      const participants = this.parseParticipants(this.form.participantsText);
-      const sessionPayload = {
-        id: this.form.id || generateSessionId(),
-        name: this.form.name.trim(),
-        description: this.form.description.trim(),
-        date: this.form.date,
-        participants,
-        createdAt: this.form.id
-          ? this.sessions.find((session) => session.id === this.form.id).createdAt
-          : new Date().toISOString()
-      };
-
-      if (!sessionPayload.name) {
+    handleProductsFileChange(event) {
+      const file = event.target.files[0];
+      if (!file) {
+        this.requestedProducts.fileName = '';
+        this.requestedProducts.count = 0;
+        this.requestedProducts.error = '';
         return;
       }
 
-      if (this.isEditing) {
-        this.sessions = this.sessions.map((session) =>
-          session.id === sessionPayload.id ? sessionPayload : session
-        );
-      } else {
-        this.sessions = [sessionPayload, ...this.sessions];
+      this.readJsonFile(file)
+        .then((parsed) => {
+          const count = this.extractItemsCount(parsed);
+          this.requestedProducts.fileName = file.name;
+          this.requestedProducts.count = count;
+          this.requestedProducts.error = '';
+        })
+        .catch(() => {
+          this.requestedProducts.fileName = '';
+          this.requestedProducts.count = 0;
+          this.requestedProducts.error = 'No se pudo leer el archivo JSON. Verificá el formato.';
+        })
+        .finally(() => {
+          event.target.value = '';
+        });
+    },
+    openNewSiteModal() {
+      this.editingSiteId = null;
+      this.siteForm = {
+        name: '',
+        baseUrl: '',
+        fileName: '',
+        productCount: 0,
+        error: ''
+      };
+      this.showSiteModal = true;
+    },
+    closeSiteModal() {
+      this.showSiteModal = false;
+      this.editingSiteId = null;
+      this.siteForm.error = '';
+    },
+    handleSiteFileChange(event) {
+      const file = event.target.files[0];
+      if (!file) {
+        return;
       }
 
-      saveSessions(this.sessions);
-      this.resetForm();
+      this.readJsonFile(file)
+        .then((parsed) => {
+          const count = this.extractItemsCount(parsed);
+          this.siteForm.fileName = file.name;
+          this.siteForm.productCount = count;
+          this.siteForm.error = '';
+        })
+        .catch(() => {
+          this.siteForm.fileName = '';
+          this.siteForm.productCount = 0;
+          this.siteForm.error = 'No se pudo leer el archivo JSON del sitio.';
+        })
+        .finally(() => {
+          event.target.value = '';
+        });
     },
-    parseParticipants(text) {
-      if (!text) {
-        return [];
+    saveSite() {
+      if (!this.siteForm.name.trim() || !this.siteForm.baseUrl.trim()) {
+        this.siteForm.error = 'Completá el nombre y la URL del sitio.';
+        return;
       }
-      return text
-        .split(/\n|,/)
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0);
-    },
-    startEdit(session) {
-      this.isEditing = true;
-      this.form = {
-        id: session.id,
-        name: session.name,
-        description: session.description,
-        date: session.date,
-        participantsText: session.participants.join(', ')
+
+      if (!this.siteForm.fileName) {
+        this.siteForm.error = 'Cargá el JSON de scrape del sitio.';
+        return;
+      }
+
+      const payload = {
+        id: this.editingSiteId || `site-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        name: this.siteForm.name.trim(),
+        baseUrl: this.siteForm.baseUrl.trim(),
+        fileName: this.siteForm.fileName,
+        productCount: this.siteForm.productCount || 0
       };
+
+      if (this.editingSiteId) {
+        this.sites = this.sites.map((site) => (site.id === this.editingSiteId ? payload : site));
+      } else {
+        this.sites = [...this.sites, payload];
+      }
+
+      this.closeSiteModal();
     },
-    resetForm() {
-      this.isEditing = false;
-      this.form = {
-        id: null,
-        name: '',
-        description: '',
-        date: '',
-        participantsText: ''
+    editSite(site) {
+      this.editingSiteId = site.id;
+      this.siteForm = {
+        name: site.name,
+        baseUrl: site.baseUrl,
+        fileName: site.fileName,
+        productCount: site.productCount,
+        error: ''
       };
+      this.showSiteModal = true;
     },
-    removeSession(sessionId) {
-      this.sessions = this.sessions.filter((session) => session.id !== sessionId);
-      saveSessions(this.sessions);
-      if (this.isEditing && this.form.id === sessionId) {
-        this.resetForm();
+    removeSite(siteId) {
+      this.sites = this.sites.filter((site) => site.id !== siteId);
+    },
+    extractItemsCount(parsed) {
+      if (!parsed || typeof parsed !== 'object') {
+        return Array.isArray(parsed) ? parsed.length : 0;
       }
-    },
-    syncFromStorage() {
-      this.sessions = loadSessions();
-    },
-    formatDate(value) {
-      if (!value) {
-        return 'Sin fecha';
+
+      if (Array.isArray(parsed)) {
+        return parsed.length;
       }
-      const date = new Date(value);
-      return date.toLocaleDateString('es-ES', {
-        weekday: 'short',
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
+
+      for (const key of SITE_KEYS) {
+        if (Array.isArray(parsed[key])) {
+          return parsed[key].length;
+        }
+      }
+
+      return 0;
+    },
+    readJsonFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const parsed = JSON.parse(event.target.result);
+            resolve(parsed);
+          } catch (error) {
+            reject(error);
+          }
+        };
+        reader.onerror = (error) => reject(error);
+        reader.readAsText(file);
       });
-    }
-  },
-  watch: {
-    sessions: {
-      deep: true,
-      handler(newSessions) {
-        saveSessions(newSessions);
+    },
+    generateRandomMatch() {
+      const value = 60 + Math.random() * 35;
+      return Math.round(value * 10) / 10;
+    },
+    handleSaveSession() {
+      this.formError = '';
+      if (!this.canSaveSession) {
+        this.formError = 'Ingresá el nombre de la sesión y cargá el JSON de productos solicitados.';
+        return;
       }
+
+      const trimmedName = this.sessionName.trim();
+      const session = {
+        id: generateSessionId(),
+        name: trimmedName,
+        createdAt: new Date().toISOString(),
+        matchRate: this.matchRate,
+        sitesCount: this.sites.length,
+        requestedProductsCount: this.totalRequestedProducts,
+        totalSiteProducts: this.totalSiteProducts,
+        sites: this.sites
+      };
+
+      const storedSessions = loadSessions();
+      const updatedSessions = [session, ...storedSessions];
+      saveSessions(updatedSessions);
+
+      this.$router.push({ name: 'home' });
     }
   }
 };
