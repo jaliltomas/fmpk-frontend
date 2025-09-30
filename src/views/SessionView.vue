@@ -13,7 +13,11 @@
         :disabled="!canSaveSession"
         @click="handleSaveSession"
       >
-        Guardar Sesión
+        <span v-if="isSaving" class="flex items-center gap-2">
+          <span class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/70 border-t-transparent"></span>
+          Guardando...
+        </span>
+        <span v-else>Guardar Sesión</span>
       </button>
     </div>
 
@@ -63,8 +67,9 @@
         <div class="bg-white border border-slate-100 rounded-2xl shadow-md p-6">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 class="text-lg font-semibold text-slate-900">Configuración de Nodos de Matcheo</h2>
-              <p class="text-sm text-slate-500">Definí las estrategias y ordená cómo se ejecutarán.</p>
+            <h2 class="text-lg font-semibold text-slate-900">Configuración de Nodos de Matcheo</h2>
+            <p class="text-sm text-slate-500">Definí las estrategias y ordená cómo se ejecutarán.</p>
+            <p v-if="isFetchingNodes" class="mt-1 text-xs text-slate-400">Cargando nodos disponibles...</p>
             </div>
             <button
               type="button"
@@ -207,6 +212,9 @@
         <div v-if="formError" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
           {{ formError }}
         </div>
+        <div v-if="saveError" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+          {{ saveError }}
+        </div>
       </div>
     </div>
 
@@ -315,7 +323,7 @@
               v-model="nodeForm.type"
               class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option v-for="option in availableNodes" :key="option" :value="option">{{ option }}</option>
+              <option v-for="option in availableNodes" :key="option.type" :value="option.type">{{ option.label }}</option>
             </select>
           </div>
           <div class="flex items-center justify-end gap-3 pt-2">
@@ -340,10 +348,22 @@
 </template>
 
 <script>
-import { generateSessionId, loadSessions, saveSessions } from '../utils/storage.js';
+import {
+  createSession,
+  uploadRequestedProducts,
+  createSessionSite,
+  resetSessionMatching,
+  listMatchingNodes
+} from '../utils/api.js';
 
 const SITE_KEYS = ['products', 'items', 'data'];
-const AVAILABLE_NODES = ['EAN', 'Embeddings', 'AIEAN', 'Nombre', 'Descripción'];
+const FALLBACK_NODES = [
+  { type: 'EAN', label: 'EAN' },
+  { type: 'Embeddings', label: 'Embeddings' },
+  { type: 'AIEAN', label: 'AIEAN' },
+  { type: 'Nombre', label: 'Nombre' },
+  { type: 'Descripción', label: 'Descripción' }
+];
 
 export default {
   name: 'SessionView',
@@ -352,6 +372,7 @@ export default {
       sessionName: '',
       requestedProducts: {
         fileName: '',
+        file: null,
         count: 0,
         error: ''
       },
@@ -359,21 +380,25 @@ export default {
       nodes: [],
       matchRate: null,
       formError: '',
+      saveError: '',
       showSiteModal: false,
       showNodeModal: false,
       editingSiteId: null,
       siteForm: {
         name: '',
         baseUrl: '',
+        file: null,
         fileName: '',
         productCount: 0,
         error: ''
       },
       nodeForm: {
-        type: AVAILABLE_NODES[0]
+        type: ''
       },
       draggedNodeIndex: null,
-      availableNodes: AVAILABLE_NODES
+      availableNodes: [],
+      isFetchingNodes: false,
+      isSaving: false
     };
   },
   computed: {
@@ -393,17 +418,42 @@ export default {
       return `${this.matchRate.toFixed(1)}%`;
     },
     canSaveSession() {
-      return Boolean(this.sessionName.trim() && this.requestedProducts.fileName && this.nodes.length > 0);
+      return Boolean(this.sessionName.trim() && this.requestedProducts.file && this.nodes.length > 0 && !this.isSaving);
     }
   },
   created() {
     this.matchRate = this.generateRandomMatch();
+    this.fetchAvailableNodes();
   },
   methods: {
+    async fetchAvailableNodes() {
+      this.isFetchingNodes = true;
+
+      try {
+        const response = await listMatchingNodes();
+        if (Array.isArray(response) && response.length > 0) {
+          this.availableNodes = response.map((node) => ({
+            type: node.type || node.nodeType || node.id,
+            label: node.displayName || node.name || node.type || 'Nodo sin nombre'
+          }));
+        } else {
+          this.availableNodes = [...FALLBACK_NODES];
+        }
+      } catch (error) {
+        console.warn('No se pudieron cargar los nodos registrados. Se usarán opciones por defecto.', error);
+        this.availableNodes = [...FALLBACK_NODES];
+      } finally {
+        this.isFetchingNodes = false;
+        if (!this.nodeForm.type && this.availableNodes.length > 0) {
+          this.nodeForm.type = this.availableNodes[0].type;
+        }
+      }
+    },
     handleProductsFileChange(event) {
       const file = event.target.files[0];
       if (!file) {
         this.requestedProducts.fileName = '';
+        this.requestedProducts.file = null;
         this.requestedProducts.count = 0;
         this.requestedProducts.error = '';
         return;
@@ -413,11 +463,13 @@ export default {
         .then((parsed) => {
           const count = this.extractItemsCount(parsed);
           this.requestedProducts.fileName = file.name;
+          this.requestedProducts.file = file;
           this.requestedProducts.count = count;
           this.requestedProducts.error = '';
         })
         .catch(() => {
           this.requestedProducts.fileName = '';
+          this.requestedProducts.file = null;
           this.requestedProducts.count = 0;
           this.requestedProducts.error = 'No se pudo leer el archivo JSON. Verificá el formato.';
         })
@@ -430,6 +482,7 @@ export default {
       this.siteForm = {
         name: '',
         baseUrl: '',
+        file: null,
         fileName: '',
         productCount: 0,
         error: ''
@@ -442,7 +495,10 @@ export default {
       this.siteForm.error = '';
     },
     openNodeModal() {
-      this.nodeForm.type = this.availableNodes[0];
+      if (this.availableNodes.length === 0) {
+        this.availableNodes = [...FALLBACK_NODES];
+      }
+      this.nodeForm.type = this.availableNodes[0] ? this.availableNodes[0].type : '';
       this.showNodeModal = true;
     },
     closeNodeModal() {
@@ -457,11 +513,13 @@ export default {
       this.readJsonFile(file)
         .then((parsed) => {
           const count = this.extractItemsCount(parsed);
+          this.siteForm.file = file;
           this.siteForm.fileName = file.name;
           this.siteForm.productCount = count;
           this.siteForm.error = '';
         })
         .catch(() => {
+          this.siteForm.file = null;
           this.siteForm.fileName = '';
           this.siteForm.productCount = 0;
           this.siteForm.error = 'No se pudo leer el archivo JSON del sitio.';
@@ -485,6 +543,7 @@ export default {
         id: this.editingSiteId || `site-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         name: this.siteForm.name.trim(),
         baseUrl: this.siteForm.baseUrl.trim(),
+        file: this.siteForm.file,
         fileName: this.siteForm.fileName,
         productCount: this.siteForm.productCount || 0
       };
@@ -502,6 +561,7 @@ export default {
       this.siteForm = {
         name: site.name,
         baseUrl: site.baseUrl,
+        file: site.file || null,
         fileName: site.fileName,
         productCount: site.productCount,
         error: ''
@@ -516,9 +576,11 @@ export default {
         return;
       }
 
+      const selected = this.availableNodes.find((option) => option.type === this.nodeForm.type);
       const newNode = {
         id: `node-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        name: this.nodeForm.type
+        name: selected ? selected.label : this.nodeForm.type,
+        type: this.nodeForm.type
       };
 
       this.nodes = [...this.nodes, newNode];
@@ -580,31 +642,66 @@ export default {
       const value = 60 + Math.random() * 35;
       return Math.round(value * 10) / 10;
     },
-    handleSaveSession() {
+    async handleSaveSession() {
       this.formError = '';
-      if (!this.canSaveSession) {
-        this.formError = 'Ingresá el nombre de la sesión, cargá el JSON de productos solicitados y agregá al menos un nodo de matcheo.';
+      this.saveError = '';
+
+      if (!this.sessionName.trim()) {
+        this.formError = 'Ingresá el nombre de la sesión para continuar.';
         return;
       }
 
-      const trimmedName = this.sessionName.trim();
-      const session = {
-        id: generateSessionId(),
-        name: trimmedName,
-        createdAt: new Date().toISOString(),
-        matchRate: this.matchRate,
-        sitesCount: this.sites.length,
-        requestedProductsCount: this.totalRequestedProducts,
-        totalSiteProducts: this.totalSiteProducts,
-        sites: this.sites,
-        nodes: this.nodes
-      };
+      if (!this.requestedProducts.file) {
+        this.formError = 'Cargá el JSON de productos solicitados.';
+        return;
+      }
 
-      const storedSessions = loadSessions();
-      const updatedSessions = [session, ...storedSessions];
-      saveSessions(updatedSessions);
+      if (this.nodes.length === 0) {
+        this.formError = 'Agregá al menos un nodo de matcheo.';
+        return;
+      }
 
-      this.$router.push({ name: 'home' });
+      this.isSaving = true;
+
+      try {
+        const payload = {
+          name: this.sessionName.trim(),
+          nodes: this.nodes.map((node) => node.type),
+          sites: this.sites.map((site) => ({
+            name: site.name,
+            baseUrl: site.baseUrl
+          }))
+        };
+
+        const created = await createSession(payload);
+        const sessionId = created && created.id ? created.id : created?.session?.id;
+
+        if (!sessionId) {
+          throw new Error('No se pudo obtener el identificador de la sesión creada.');
+        }
+
+        if (this.requestedProducts.file) {
+          await uploadRequestedProducts(sessionId, this.requestedProducts.file);
+        }
+
+        for (const site of this.sites) {
+          await createSessionSite(sessionId, {
+            name: site.name,
+            baseUrl: site.baseUrl,
+            file: site.file || null
+          });
+        }
+
+        if (this.requestedProducts.file) {
+          await resetSessionMatching(sessionId);
+        }
+
+        this.$router.push({ name: 'session-detail', params: { id: sessionId } });
+      } catch (error) {
+        this.saveError = error.message || 'Ocurrió un error al guardar la sesión.';
+      } finally {
+        this.isSaving = false;
+      }
     }
   }
 };

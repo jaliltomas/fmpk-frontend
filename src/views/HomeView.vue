@@ -33,7 +33,15 @@
         </router-link>
       </div>
 
-      <div v-if="!hasSessions" class="px-6 py-10 text-center text-slate-500">
+      <div v-if="isLoading" class="px-6 py-10 text-center text-slate-500">
+        Cargando sesiones...
+      </div>
+
+      <div v-else-if="error" class="px-6 py-10 text-center text-rose-500">
+        {{ error }}
+      </div>
+
+      <div v-else-if="!hasSessions" class="px-6 py-10 text-center text-slate-500">
         Todavía no hay sesiones
       </div>
 
@@ -53,8 +61,8 @@
 </template>
 
 <script>
-import { loadSessions } from '../utils/storage.js';
 import SessionCard from '../components/SessionCard.vue';
+import { listSessions } from '../utils/api.js';
 
 export default {
   name: 'HomeView',
@@ -63,7 +71,10 @@ export default {
   },
   data() {
     return {
-      sessions: []
+      sessions: [],
+      pagination: null,
+      isLoading: false,
+      error: ''
     };
   },
   computed: {
@@ -98,19 +109,33 @@ export default {
   created() {
     this.fetchSessions();
   },
-  mounted() {
-    window.addEventListener('storage', this.handleStorageChange);
-  },
-  beforeUnmount() {
-    window.removeEventListener('storage', this.handleStorageChange);
-  },
   methods: {
-    fetchSessions() {
-      this.sessions = loadSessions();
-    },
-    handleStorageChange(event) {
-      if (event.key === 'fmpk_sessions') {
-        this.fetchSessions();
+    async fetchSessions() {
+      this.isLoading = true;
+      this.error = '';
+
+      try {
+        const response = await listSessions({ page: 1, pageSize: 50 });
+
+        if (response && Array.isArray(response.data)) {
+          this.sessions = response.data;
+          this.pagination = response.pagination || null;
+        } else if (Array.isArray(response)) {
+          this.sessions = response;
+          this.pagination = null;
+        } else if (response && typeof response === 'object' && Array.isArray(response.items)) {
+          this.sessions = response.items;
+          this.pagination = response.pagination || null;
+        } else {
+          this.sessions = [];
+          this.pagination = null;
+        }
+      } catch (error) {
+        this.error = error.message || 'No se pudieron cargar las sesiones.';
+        this.sessions = [];
+        this.pagination = null;
+      } finally {
+        this.isLoading = false;
       }
     },
     formatDate(value) {
@@ -125,14 +150,24 @@ export default {
       });
     },
     resolveMatchRate(session) {
+      const fromMetrics = this.extractMetricPercentage(session);
+      if (fromMetrics !== null) {
+        return fromMetrics;
+      }
       if (typeof session.matchRate === 'number') {
-        return session.matchRate;
+        return this.ensurePercentage(session.matchRate);
       }
       if (typeof session.matchPercentage === 'number') {
-        return session.matchPercentage;
+        return this.ensurePercentage(session.matchPercentage);
       }
       if (session.match && typeof session.match.percentage === 'number') {
-        return session.match.percentage;
+        return this.ensurePercentage(session.match.percentage);
+      }
+      if (typeof session.efficacy === 'number') {
+        return this.ensurePercentage(session.efficacy);
+      }
+      if (typeof session.efficacyPercentage === 'number') {
+        return this.ensurePercentage(session.efficacyPercentage);
       }
       return null;
     },
@@ -146,10 +181,65 @@ export default {
       if (Array.isArray(session.participants)) {
         return session.participants.length;
       }
+      if (session.metrics && typeof session.metrics.totalSites === 'number') {
+        return session.metrics.totalSites;
+      }
+      if (session.statistics && typeof session.statistics.sites === 'number') {
+        return session.statistics.sites;
+      }
       return 0;
     },
     goToSessionDetail(sessionId) {
       this.$router.push({ name: 'session-detail', params: { id: sessionId } });
+    },
+    extractMetricPercentage(session) {
+      if (!session) {
+        return null;
+      }
+
+      const sources = [session.metrics, session.statistics, session.matchMetrics, session.validationStats];
+
+      for (const source of sources) {
+        if (!source || typeof source !== 'object') {
+          continue;
+        }
+
+        const candidates = [
+          source.efficacy,
+          source.efficacyPercentage,
+          source.accuracy,
+          source.matchRate,
+          source.matchPercentage,
+          source.successRate,
+          source.percentage
+        ];
+
+        for (const candidate of candidates) {
+          if (typeof candidate === 'number' && !Number.isNaN(candidate)) {
+            return this.ensurePercentage(candidate);
+          }
+        }
+
+        if (source.correct && source.validated) {
+          const calculated = (source.correct / source.validated) * 100;
+          if (!Number.isNaN(calculated)) {
+            return calculated;
+          }
+        }
+      }
+
+      return null;
+    },
+    ensurePercentage(value) {
+      if (typeof value !== 'number' || Number.isNaN(value)) {
+        return null;
+      }
+
+      if (value <= 1) {
+        return value * 100;
+      }
+
+      return value;
     }
   },
   watch: {
